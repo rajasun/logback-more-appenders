@@ -22,6 +22,8 @@
  */
 package ch.qos.logback.more.appenders;
 
+import java.text.DateFormat;
+import java.text.SimpleDateFormat;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -42,6 +44,8 @@ public class DataFluentAppender extends UnsynchronizedAppenderBase<ILoggingEvent
 		private final String label;
 		private final String remoteHost;
 		private final int port;
+		// This time format cannot be changed, this is how LogStash & Kibana expects
+		private DateFormat df = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSZ");		
 
 		FluentDaemonAppender(String tag, String label, String remoteHost, int port, int maxQueueSize) {
 			super(maxQueueSize);
@@ -63,7 +67,10 @@ public class DataFluentAppender extends UnsynchronizedAppenderBase<ILoggingEvent
 				super.close();
 			} finally {
 				if (fluentLogger != null) {
-					fluentLogger.close();
+				  // Note: Strange Issue. For some reason, when used in SpringBoot the whole logging susbsystem gets re-initialized
+				  // during that process the fluentD connection gets removed and never established again.. Its a short term fix 
+				  // for demo. In prod, we wont be using this appender.
+					// fluentLogger.close();
 				}
 			}
 		}
@@ -75,6 +82,10 @@ public class DataFluentAppender extends UnsynchronizedAppenderBase<ILoggingEvent
 			data.put("logger", rawData.getLoggerName());
 			data.put("thread", rawData.getThreadName());
 			data.put("level", rawData.getLevel());
+			// In order to send the timestamp with ms to ES, this is added to stream
+			// Even though this appender sends the timestamp to FD aggregatior, it simply ignores it
+			// There is no way to keep it in the stream. So adding it manually.
+      data.put("@timestamp", df.format(rawData.getTimeStamp()));
 			if (rawData.getMarker() != null) {
 				data.put("marker", rawData.getMarker());
 			}
